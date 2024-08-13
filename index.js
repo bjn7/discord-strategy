@@ -73,7 +73,7 @@ class Strategy extends OAuth2Strategy {
       profile.avtarUrl = `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}`;
       profile.connection = this.getConnection.bind(this, profile);
       profile.guilds = this.getGuilds.bind(this, profile);
-
+      profile.clean = this.clean.bind(this, profile);
       profile.resolver = (key, api, accessToken, done) => {
         this.resolveApi(api, accessToken, (err, data) => {
           if (err) {
@@ -118,6 +118,7 @@ class Strategy extends OAuth2Strategy {
       }
     );
   }
+
   getGuilds(profile, accessToken, done) {
     if (!this._scope || !this._scope.includes("guilds"))
       return done(new Error("Missing Scope, 'guilds'"));
@@ -129,18 +130,19 @@ class Strategy extends OAuth2Strategy {
       return done(null, profile);
     });
   }
+
   /**
    * Clean the user object by removing functions.
-   * @param {Object} user - The user object to clean.
-   * @returns {Object} - The cleaned user object.
+   * @param {Object} profile - The user object to clean.
+   * @returns {Function} done - The cleaned user object.
    */
-  clean(user) {
-    Object.keys(user).forEach((key) => {
-      if (user[key] instanceof Function) {
-        delete user[key];
+  clean(profile, done) {
+    Object.keys(profile).forEach((key) => {
+      if (profile[key] instanceof Function) {
+        delete profile[key];
       }
     });
-    return user;
+    return done();
   }
 
   /**
@@ -246,7 +248,12 @@ class Strategy extends OAuth2Strategy {
               }
 
               function verified(err, user, info) {
-                user = self.clean(user);
+                //if cleaner wasn't called this will make sure to clean, while storing in session
+                Object.keys(user).forEach((key) => {
+                  if (user[key] instanceof Function) {
+                    delete user[key];
+                  }
+                });
                 if (err) {
                   return self.error(err);
                 }

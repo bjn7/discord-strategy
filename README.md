@@ -44,6 +44,8 @@ function verify(accessToken, refreshToken, profile, done) {
     profile.guilds(accessToken, (err) => {
       if (err) return done(err, false);
       console.log("Authentication successful!", profile);
+      // Call clean before saving to the database. Since we aren't using any other functionalities,
+      // there's no need to call clean here.
       done(null, profile);
     });
   });
@@ -91,8 +93,8 @@ These functions are available on the `profile` object to fetch additional data:
 
 - **`profile.connection(accessToken, callback)`**: Fetches the user's connections. Requires the `connections` scope.
 - **`profile.guilds(accessToken, callback)`**: Fetches the guilds the user is part of. Requires the `guilds` scope.
-
-more are comming soon..
+- **`profile.clean(callback)`** : Cleans the profile object by removing functions.
+  more are comming soon..
 
 ### Example Profile Object
 
@@ -102,7 +104,9 @@ more are comming soon..
 {
   "id": "123456789",
   "username": "exampleUser",
-  "connections": [function: "getConnections"]
+  "connections": [function: "getConnections"],
+  "resolver" : [function: "resolver"],
+  "clean": [function: "clean"]
 }
 ```
 
@@ -116,6 +120,36 @@ more are comming soon..
     { "connectionName": "Steam", "id": "steam_12345" },
     { "connectionName": "Twitch", "id": "twitch_12345" }
   ]
+}
+```
+
+## Cleaner Function
+
+The `clean` function cleans the profile object by removing functions.
+
+```js
+clean(profile, done) {
+    Object.keys(profile).forEach((key) => {
+      if (profile[key] instanceof Function) {
+        delete profile[key];
+      }
+    });
+    return done();
+  }
+```
+
+### Example Usage
+
+```js
+function verify(accessToken, refreshToken, profile, done) {
+  profile.resolver("guilds", "users/@me/guilds", accessToken, (err) => {
+    if (err) return done(err);
+    profile.clean(() => {
+      // Perform operations like saving to the database here
+      // Note: The cleaner will automatically run when invoking the done() function
+      done(null, profile);
+    });
+  });
 }
 ```
 
@@ -162,3 +196,7 @@ After retrieving the data, before invoking `done function` will call a cleaner m
 ## Refresh Tokens and Additional Handling
 
 If you need to store the refreshToken, manage sessions, or handle other processes unrelated to Discord OAuth, such as storing data in a database, kindly refer to the passport.js documentation for more information on how to manage these tasks or explore other strategies that might need to be used for this additional handling.
+
+## v1.0.1 patch
+
+- Bound the cleaner function to the clean property of the profile, i.e., profile.clean().
