@@ -34,6 +34,7 @@ const API_BASE = "https://discord.com/api/";
  *         });
  *       }
  *     ));
+ * 
  * @param {Object} options - Configuration options.
  * @param {Function} verify - The verify callback function.
  */
