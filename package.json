@@ -3,7 +3,7 @@
     "passport-oauth2": "^1.8.0"
   },
   "name": "discord-strategy",
-  "description": "",
+  "description": "Passport strategy for Discord OAuth2",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
