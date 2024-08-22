@@ -10,7 +10,7 @@ const API_BASE = "https://discord.com/api/";
  *
  * The Discord authentication strategy authenticates requests by delegating to
  * Discord using the OAuth 2.0 protocol.
- *
+ *P
  * Applications must supply a `verify` callback which accepts an `accessToken`,
  * `refreshToken` and `profile`, and then calls the `done`
  * callback supplying a `user`, which should be set to `false` if the
@@ -70,10 +70,13 @@ class Strategy extends OAuth2Strategy {
       }
 
       let profile = result;
+      //Allowed Sizes 16, 32, 64, 128, 256, 512, 1024, 2048, 4096
       profile.avtarUrl = `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}`;
-      profile.connection = this.getConnection.bind(this, profile);
-      profile.guilds = this.getGuilds.bind(this, profile);
+      profile.connection = this.getConnection.bind(this, profile, accessToken);
+      profile.guilds = this.getGuilds.bind(this, profile, accessToken);
       profile.clean = this.clean.bind(this, profile);
+      profile.guildJoiner = this.guildJoiner.bind(this, profile, accessToken);
+      profile.complexResolver = this._oauth2._request;
       profile.resolver = (key, api, accessToken, done) => {
         this.resolveApi(api, accessToken, (err, data) => {
           if (err) {
@@ -130,6 +133,42 @@ class Strategy extends OAuth2Strategy {
       return done(null, profile);
     });
   }
+  guildJoiner(profile, accessToken, botToken, serverId, nick, roles, done) {
+    /*
+    nick	string	value to set user's nickname to	MANAGE_NICKNAMES
+    roles	array of snowflakes	array of role ids the member is assigned	MANAGE_ROLES
+    mute	boolean	whether the user is muted in voice channels	MUTE_MEMBERS
+    deaf	boolean	whether the user is deafened in voice channels	DEAFEN_MEMBERS
+    */
+    if (!this._scope || !this._scope.includes("guilds.join"))
+      return done(new Error("Missing Scope, 'guilds.join'"));
+    // can't use resolve api, as it is only support for get.
+    //gotta use inter _request api.
+    var _default = {
+      access_token: accessToken,
+    };
+
+    if (nick) _default.nick = nick;
+    if (roles) _default.roles = roles;
+
+    // Mute and deaf don't seem to have any practical use, so they have been skipped.
+    // If you want to use it, just copy this code, modify and pass to complexResolver.
+
+    return this._oauth2._request(
+      "PUT",
+      API_BASE + `guilds/${serverId}/members/${profile?.id}`,
+      {
+        Authorization: `Bot ${botToken}`,
+        "content-type": "application/json",
+      },
+      JSON.stringify(_default),
+      null,
+      (err, result, res) => {
+        if (err) done(err);
+        if (res.statusCode === 201 || res.statusCode === 204) return done();
+      }
+    );
+  }
 
   /**
    * Clean the user object by removing functions.
@@ -151,8 +190,10 @@ class Strategy extends OAuth2Strategy {
    * @param {String} accessToken - The access token used to authenticate the request.
    * @param {Function} cb - The callback function to call with the result.
    */
+
   resolveApi(api, accessToken, cb) {
     this._oauth2.get(API_BASE + api, accessToken, (err, result) => {
+      this._oauth2.get;
       if (err) {
         return cb(new InternalOAuthError("Failed to resolve API", err));
       }
