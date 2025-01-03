@@ -36,7 +36,7 @@ const options = {
 // Create a new instance of the Strategy
 passport.use(new Strategy(options, verify));
 
-async function verify(accessToken, refreshToken, profile, done) {
+async function verify(accessToken, refreshToken, profile, done, consume) {
   try {
     // Fetch connections and guilds concurrently
     await Promise.all([consume.connections(), consume.guilds()]);
@@ -86,14 +86,12 @@ List of Consumable Functions
 
 - **`guilds(callback)`**: Fetches the user's connections. Requires the `connections` scope.
 - **`connections(callback)`**: Fetches the guilds the user is part of. Requires the `guilds` scope.
-- **`guildJoiner(botToken, serverId, nickname, roles)`**: Cleans the profile object by removing functions.
+- **`guildJoiner(botToken, serverId, nickname, roles)`**: join the specified guild.
 - **`profile.resolver(key, api)`**: Fetches data from a specified API endpoint and stores it under the given key in the profile.
 - **`consume.resolverCallbackBased(key, api, callback)`**: Allows customization of data fetching with more complex API interactions. The access token is sent as a query parameter btw.
 - **`consume.profile()`**: Returns the updated user profile.
 
-### Example Profile Object
-
-Example Usage
+### Example Usage
 
 ## Concurrent Data Fetching
 
@@ -152,13 +150,15 @@ function verify(accessToken, refreshToken, profile, done) {
 }
 ```
 
-Before invoking the `done` function, the cleaner method will be called to remove any unused consumable functions from the profile object. This ensures that only essential data is passed forward.
-
 ## Refresh Tokens and Additional Handling
 
 If you need to store the `refreshToken`, manage sessions, or handle other processes unrelated to Discord OAuth, please refer to the Passport.js documentation for more information on managing these tasks or explore other strategies that might be necessary for additional handling.
 
 ## Changelog
+
+### v2.0.1 Patch
+
+- Fixed typo and doc error
 
 ### v2.0 Patch
 
