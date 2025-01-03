@@ -1,17 +1,12 @@
 {
   "dependencies": {
-    "discord-strategy": "^1.2.0",
-    "express": "^4.21.2",
-    "passport": "^0.7.0",
     "passport-oauth2": "^1.8.0"
   },
   "name": "discord-strategy",
   "description": "Passport strategy for Discord OAuth2",
   "version": "2.0.0",
-  "main": "build/index.js",
-  "types": "build/index.d.ts",
+  "main": "index.js",
   "scripts": {
-    "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
