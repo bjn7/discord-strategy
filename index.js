@@ -47,16 +47,19 @@ class Strategy extends OAuth2Strategy {
         guilds: this.getGuilds.bind(this, profile, accessToken),
         guildJoiner: this.guildJoiner.bind(this, profile, accessToken),
         connections: this.getConnection.bind(this, profile, accessToken),
+        member: this.getMember.bind(this, profile, accessToken),
         complexResolver: this._oauth2._request,
         profile: () => profile,
         resolver: async (key, api) => {
-          try {
-            const data = await this.resolveApi(api, accessToken);
-            profile[key] = data;
-            return profile;
-          } catch (err) {
-            throw err;
-          }
+          return new Promise(async (resolve, reject) => {
+            try {
+              const data = await this.resolveApi(api, accessToken);
+              profile[key] = data;
+              resolve(profile);
+            } catch (err) {
+              reject(err);
+            }
+          })
         },
         resolverCallbackBased: async (key, api, done) => {
           try {
@@ -94,7 +97,7 @@ class Strategy extends OAuth2Strategy {
       if (done) done(null, profile)
     } catch (e) {
       if (done) return done(e, null)
-      throw e;
+      return e;
     }
   }
 
@@ -115,8 +118,33 @@ class Strategy extends OAuth2Strategy {
       if (done) done(null, profile)
     } catch (e) {
       if (done) return done(e, null)
-      throw e;
+      return e;
     }
+  }
+
+  async getMember(profile, accessToken, guild_id, done) {
+    if (!this.options.scope || !this.options.scope.includes("guilds.members.read")) {
+      throw new Error("Missing Scope, 'guilds.members.read'");
+    }
+    if (!profile.member) {
+      profile.member = {}
+    }
+
+    try {
+      const member = await this.resolveApi(`users/@me/guilds/${guild_id}/member`, accessToken);
+      profile.member[guild_id] = member;
+      if (done) done(null, profile)
+    } catch (e) {
+      if (JSON.parse(e.data)?.code == 10004) {
+        profile.member[guild_id] = null
+        e = null
+      }
+      else {
+        if (done) return done(e, profile)
+        return e;
+      }
+    }
+
   }
 
   /**
@@ -179,23 +207,26 @@ class Strategy extends OAuth2Strategy {
    * @throws Will throw an error for request or parsing issues.
    */
   async resolveApi(api, accessToken) {
-    try {
-      const result = await new Promise((resolve, reject) => {
-        this._oauth2.get(`${API_BASE}${api}`, accessToken, (err, result) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(result);
-          }
+    return new Promise(async (res, rej) => {
+      try {
+        const result = await new Promise((resolve, reject) => {
+          this._oauth2.get(`${API_BASE}${api}`, accessToken, (err, result) => {
+            if (err) {
+              reject(err);
+            } else {
+              resolve(result);
+            }
+          });
         });
-      });
-      return JSON.parse(result);
-    } catch (err) {
-      if (err instanceof SyntaxError) {
-        throw new Error("Failed to parse the user profile.");
+        res(JSON.parse(result))
+      } catch (err) {
+        if (err instanceof SyntaxError) {
+          reject(new Error("Failed to parse the user profile."));
+        }
+        // throw new InternalOAuthError("Failed to resolve API", err);
+        rej(err)
       }
-      throw new InternalOAuthError("Failed to resolve API", err);
-    }
+    })
   }
 
   /**

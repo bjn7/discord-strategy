@@ -30,7 +30,7 @@ const options = {
   clientID: "YOUR_CLIENT_ID",
   clientSecret: "YOUR_CLIENT_SECRET",
   callbackURL: "http://localhost:3000/auth/discord/callback",
-  scope: ["identify", "email", "guilds", "connections"], // Example scopes
+  scope: ["identify", "email", "guilds", "connections", "guilds.members.read"], // Example scopes
 };
 
 // Create a new instance of the Strategy
@@ -38,13 +38,17 @@ passport.use(new Strategy(options, verify));
 
 async function verify(accessToken, refreshToken, profile, done, consume) {
   try {
-    // Fetch connections and guilds concurrently
-    await Promise.all([consume.connections(), consume.guilds()]);
+    // Fetch connections, guilds, guild member concurrently
+    await Promise.all([
+      consume.connections(),
+      consume.guilds(),
+      console.memeber("613425648685547541"), //https://discord.com/developers/docs/resources/user#get-current-user
+    ]);
     profile = consume.profile();
     console.log("Authentication successful!");
     done(null, profile);
   } catch (error) {
-    done(error, null);
+    done(error?.data || error, null);
   }
 }
 
@@ -87,7 +91,9 @@ List of Consumable Functions
 - **`guilds(callback)`**: Fetches the user's connections. Requires the `connections` scope.
 - **`connections(callback)`**: Fetches the guilds the user is part of. Requires the `guilds` scope.
 - **`guildJoiner(botToken, serverId, nickname, roles)`**: join the specified guild.
-- **`profile.resolver(key, api)`**: Fetches data from a specified API endpoint and stores it under the given key in the profile.
+- `member(guild_id)`: Returns a guild member object for the current user and creates a member property inside the profile. Within the member property, there is a guild_id. If profile.member.guild_id is null, the user is not in that guild. This requires the guilds.members.read OAuth2 scope.
+
+- **`resolver(key, api)`**: Fetches data from a specified API endpoint and stores it under the given key in the profile.
 - **`consume.resolverCallbackBased(key, api, callback)`**: Allows customization of data fetching with more complex API interactions. The access token is sent as a query parameter btw.
 - **`consume.profile()`**: Returns the updated user profile.
 
@@ -155,6 +161,12 @@ function verify(accessToken, refreshToken, profile, done) {
 If you need to store the `refreshToken`, manage sessions, or handle other processes unrelated to Discord OAuth, please refer to the Passport.js documentation for more information on managing these tasks or explore other strategies that might be necessary for additional handling.
 
 ## Changelog
+
+### v2.1 Patch
+
+- Added `consume.member("guild_id")`,Returns a guild member object for the current user. https://discord.com/developers/docs/resources/user#get-current-user-guild-member
+
+- Resolver function now rejects the promise instead of throwing an error.
 
 ### v2.0.1 Patch
 
