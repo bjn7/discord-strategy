@@ -1,8 +1,5 @@
 {
   "dependencies": {
-    "discord-strategy": "^2.0.1",
-    "express": "^4.21.2",
-    "passport": "^0.7.0",
     "passport-oauth2": "^1.8.0"
   },
   "name": "discord-strategy",
