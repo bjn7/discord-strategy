@@ -84,17 +84,22 @@ app.listen(3000, () => {
 
 ## Consumable Functions
 
-With the v2.0 patch, all utility functions are now encapsulated in a new `consume` parameter, simplifying their use and improving performance through asynchronous operations
+With the v2.0 patch, all utility functions are now encapsulated in a new `consume` parameter.
 
 List of Consumable Functions
 
-- **`guilds(callback)`**: Fetches the user's connections. Requires the `connections` scope.
-- **`connections(callback)`**: Fetches the guilds the user is part of. Requires the `guilds` scope.
-- **`guildJoiner(botToken, serverId, nickname, roles)`**: join the specified guild.
-- `member(guild_id)`: Returns a guild member object for the current user and creates a member property inside the profile. Within the member property, there is a guild_id. If profile.member.guild_id is null, the user is not in that guild. This requires the guilds.members.read OAuth2 scope.
+- **`guilds(callback?)`**: Fetches the user's connections. Requires the `connections` scope.
+
+- **`connections(callback?)`**: Fetches the guilds the user is part of. Requires the `guilds` scope.
+
+- **`guildJoiner(botToken: string, serverId: string, nickname: string, roles: string[], callback)`**: join the specified guild.
+
+- **`member(guild_id: string)`**: Returns a guild member object for the current user and creates a member property inside the profile. Within the member property, there is a guild_id. If profile.member.guild_id is null, the user is not in that guild. This requires the guilds.members.read OAuth2 scope.
 
 - **`resolver(key, api)`**: Fetches data from a specified API endpoint and stores it under the given key in the profile.
+
 - **`consume.resolverCallbackBased(key, api, callback)`**: Allows customization of data fetching with more complex API interactions. The access token is sent as a query parameter btw.
+
 - **`consume.profile()`**: Returns the updated user profile.
 
 ### Example Usage
