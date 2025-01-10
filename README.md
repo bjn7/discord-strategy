@@ -75,6 +75,17 @@ app.listen(3000, () => {
 });
 ```
 
+## Eample 2, Basic info Only
+
+For scenarios where only basic user information is needed:
+
+```javascript
+function verify(accessToken, refreshToken, profile, done, consume) {
+  console.log("Fetched", profile);
+  return done(null, profile);
+}
+```
+
 ## Strategy Options
 
 - **`clientID`**: Your Discord application's Client ID.
@@ -90,17 +101,99 @@ List of Consumable Functions
 
 - **`guilds(callback?)`**: Fetches the user's connections. Requires the `connections` scope.
 
+```js
+function verify(accessToken, refreshToken, profile, done, consume) {
+  try {
+    await consume.guilds(); //retuns void;
+    profile = consume.profile(); //update profile, includes guild in `guilds` property.
+    console.log(profile.guild);
+    done(null, profile);
+  } catch (err) {
+    done(err, null);
+  }
+```
+
 - **`connections(callback?)`**: Fetches the guilds the user is part of. Requires the `guilds` scope.
+
+```js
+await consume.connections(); //retuns void;
+profile = consume.profile(); //update profile, includes guild in `connections` property.
+console.log(profile.connections);
+```
 
 - **`guildJoiner(botToken: string, serverId: string, nickname: string, roles: string[], callback)`**: join the specified guild.
 
+```js
+await consume.guildJoiner(
+  "botToken",
+  "serverId",
+  undefined,
+  undefined,
+  (err, result) =>
+    !err && !result ? console.log("Joined") : console.log(err, result)
+); //retuns void;
+```
+
 - **`member(guild_id: string)`**: Returns a guild member object for the current user and creates a member property inside the profile. Within the member property, there is a guild_id. If profile.member.guild_id is null, the user is not in that guild. This requires the guilds.members.read OAuth2 scope.
 
+```js
+await consume.member("id");
+profile = consume.profile();
+done(null, profile);
+```
+
 - **`resolver(key, api)`**: Fetches data from a specified API endpoint and stores it under the given key in the profile.
+
+```js
+await consume.resolver("guilds", "users/@me/guilds");
+profile = consume.profile();
+done(null, profile);
+```
 
 - **`consume.resolverCallbackBased(key, api, callback)`**: Allows customization of data fetching with more complex API interactions. The access token is sent as a query parameter btw.
 
 - **`consume.profile()`**: Returns the updated user profile.
+
+```js
+done(null, consume.profile());
+```
+
+- **`consume.linkedRole.get()`**: Returns the application role connection for the user. Requires an `role_connections.write` scope.
+
+- **`consume.linkedRole.set(platform_name, platform_username, metadata, done?)`**: Updates and returns the application role connection for the user. Requires an `role_connections.write` scope.
+
+```js
+// Role register Example
+// fetch(
+//   `https://discord.com/api/v10/applications/APPLICATION_ID_HERE/role-connections/metadata`,
+//   {
+//     method: "PUT",
+//     body: JSON.stringify([
+//       {
+//         key: "cool",
+//         name: "Cool ppl",
+//         description: "You are cool ppl",
+//         type: 7, //type 7: BOOLEAN_EQUAL
+//       },
+//     ]),
+//     headers: {
+//       "Content-Type": "application/json",
+//       Authorization: `Bot BOT_TOKEN`,
+//     },
+//   }
+// )
+//   .then((r) => r.json())
+//   .then(console.log);
+//
+// After registration do not forget to place url in designated field.
+// Bot setting -> General Information -> Linked Roles Verification URL
+
+await consume.set({
+  //key: value,
+  cool: 1, //for type 7, value 1 represent true
+});
+done(null, profile);
+```
 
 ### Example Usage
 
@@ -150,22 +243,17 @@ async function verify(accessToken, refreshToken, profile, done, consume) {
 }
 ```
 
-## Basic Information Only
-
-For scenarios where only basic user information is needed:
-
-```javascript
-function verify(accessToken, refreshToken, profile, done) {
-  console.log("Fetched", profile);
-  return done(null, profile);
-}
-```
-
 ## Refresh Tokens and Additional Handling
 
 If you need to store the `refreshToken`, manage sessions, or handle other processes unrelated to Discord OAuth, please refer to the Passport.js documentation for more information on managing these tasks or explore other strategies that might be necessary for additional handling.
 
 ## Changelog
+
+### v2.2 Patch
+
+- Added `consume.linkedRole.get` & `consume.linkedRole.get`. https://discord.com/developers/docs/resources/user#get-current-user-guild-member & https://discord.com/developers/docs/resources/user#get-current-user-application-role-connection
+
+- Resolver function now rejects the promise instead of throwing an error.
 
 ### v2.1 Patch
 

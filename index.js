@@ -17,13 +17,12 @@ const API_BASE = "https://discord.com/api/";
 class Strategy extends OAuth2Strategy {
   constructor(options, verify) {
     options = options || {};
-    options.authorizationURL = options.authorizationURL || "https://discord.com/api/oauth2/authorize";
-    options.tokenURL = options.tokenURL || "https://discord.com/api/oauth2/token";
+    options.authorizationURL =
+      options.authorizationURL || "https://discord.com/api/oauth2/authorize";
+    options.tokenURL =
+      options.tokenURL || "https://discord.com/api/oauth2/token";
     options.scopeSeparator = options.scopeSeparator || " ";
-    options.scope = options.scope || [
-      "identify",
-      "email",
-    ];
+    options.scope = options.scope || ["identify", "email"];
 
     if (!options.callbackURL) throw new Error("Missing callbackURL property");
     if (!options.clientID) throw new Error("Missing clientID property");
@@ -48,6 +47,10 @@ class Strategy extends OAuth2Strategy {
         guildJoiner: this.guildJoiner.bind(this, profile, accessToken),
         connections: this.getConnection.bind(this, profile, accessToken),
         member: this.getMember.bind(this, profile, accessToken),
+        linkedRole: {
+          get: this.getRoleConnectionMetadata.bind(this, profile, accessToken),
+          set: this.setRoleConnectionMetadata.bind(this, profile, accessToken),
+        },
         complexResolver: this._oauth2._request,
         profile: () => profile,
         resolver: async (key, api) => {
@@ -59,7 +62,7 @@ class Strategy extends OAuth2Strategy {
             } catch (err) {
               reject(err);
             }
-          })
+          });
         },
         resolverCallbackBased: async (key, api, done) => {
           try {
@@ -92,11 +95,14 @@ class Strategy extends OAuth2Strategy {
     }
 
     try {
-      const connections = await this.resolveApi("users/@me/connections", accessToken);
+      const connections = await this.resolveApi(
+        "users/@me/connections",
+        accessToken
+      );
       profile.connections = connections;
-      if (done) done(null, profile)
+      if (done) done(null, profile);
     } catch (e) {
-      if (done) return done(e, null)
+      if (done) return done(e, null);
       return e;
     }
   }
@@ -115,36 +121,40 @@ class Strategy extends OAuth2Strategy {
     try {
       const guilds = await this.resolveApi("users/@me/guilds", accessToken);
       profile.guilds = guilds;
-      if (done) done(null, profile)
+      if (done) done(null, profile);
     } catch (e) {
-      if (done) return done(e, null)
+      if (done) return done(e, null);
       return e;
     }
   }
 
   async getMember(profile, accessToken, guild_id, done) {
-    if (!this.options.scope || !this.options.scope.includes("guilds.members.read")) {
+    if (
+      !this.options.scope ||
+      !this.options.scope.includes("guilds.members.read")
+    ) {
       throw new Error("Missing Scope, 'guilds.members.read'");
     }
     if (!profile.member) {
-      profile.member = {}
+      profile.member = {};
     }
 
     try {
-      const member = await this.resolveApi(`users/@me/guilds/${guild_id}/member`, accessToken);
+      const member = await this.resolveApi(
+        `users/@me/guilds/${guild_id}/member`,
+        accessToken
+      );
       profile.member[guild_id] = member;
-      if (done) done(null, profile)
+      if (done) done(null, profile);
     } catch (e) {
       if (JSON.parse(e.data)?.code == 10004) {
-        profile.member[guild_id] = null
-        e = null
-      }
-      else {
-        if (done) return done(e, profile)
+        profile.member[guild_id] = null;
+        e = null;
+      } else {
+        if (done) return done(e, profile);
         return e;
       }
     }
-
   }
 
   /**
@@ -157,7 +167,15 @@ class Strategy extends OAuth2Strategy {
    * @param {string[]} roles - The roles to assign to the user.
    * @param {Function} done - Callback for handling the result.
    */
-  async guildJoiner(profile, accessToken, botToken, serverId, nick, roles, done) {
+  async guildJoiner(
+    profile,
+    accessToken,
+    botToken,
+    serverId,
+    nick,
+    roles,
+    done
+  ) {
     if (!this.options.scope || !this.options.scope.includes("guilds.join")) {
       done(new Error("Missing Scope, 'guilds.join'"));
       return;
@@ -192,10 +210,106 @@ class Strategy extends OAuth2Strategy {
       if (res.statusCode === 201 || res.statusCode === 204) {
         done(null, null);
       } else {
-        done(new Error(`Unexpected status code: ${res.statusCode}`));
+        done(null, res.statusCode);
       }
     } catch (error) {
       done(error);
+    }
+  }
+
+  /**
+   * Retrieves the linked role metadata associated with the user's Discord account.
+   * @param {string} profile - The user's profile.
+   * @param {string} accessToken - The access token for the user.
+   * @returns {Promise<Object>} The resolved data.
+   * @throws Will throw an error for request or parsing issues.
+   */
+  async getRoleConnectionMetadata(profile, accessToken, done) {
+    if (
+      !this.options.scope ||
+      !this.options.scope.includes("role_connections.write")
+    ) {
+      throw new Error("Missing Scope, 'role_connections.write'");
+    }
+
+    if (!profile.linkedRole) {
+      profile.linkedRole = {};
+    }
+    try {
+      const metadata = await this.resolveApi(
+        `users/@me/applications/${this.options.clientID}/role-connection`,
+        accessToken
+      );
+      profile.linkedRole.get = metadata;
+      if (done) return done(null, profile);
+    } catch (e) {
+      if (done) return done(e, null);
+      return e;
+    }
+  }
+
+  /**
+   * updated the linked role metadata associated with the user's Discord account.
+   * @param {string} profile - The user's profile.
+   * @param {string} accessToken - The access token for the user.
+   * @param {string} platform_name - The vanity name of the platform a bot has connected (max 50 characters)
+   * @param {string} platform_username - The username on the platform a bot has connected (max 100 characters)
+   * @typedef {Object} metadata
+   * @property {string} property1 - Description for property1.
+   * @property {number} property2 - Description for property2.
+   * @property {boolean} property3 - Description for property3.
+   * @returns {Promise<Object>} The resolved data.
+   * @throws Will throw an error for request or parsing issues.
+   */
+  async setRoleConnectionMetadata(
+    profile,
+    accessToken,
+    platform_name,
+    platform_username,
+    metadata,
+    done
+  ) {
+    if (
+      !this.options.scope ||
+      !this.options.scope.includes("role_connections.write")
+    ) {
+      throw new Error("Missing Scope, 'role_connections.write'");
+    }
+    if (!profile.linkedRole) {
+      profile.linkedRole = {};
+    }
+    try {
+      const role = await new Promise((resolve, reject) => {
+        this._oauth2._request(
+          "PUT",
+          `${API_BASE}/users/@me/applications/${this.options.clientID}/role-connection`,
+          {
+            Authorization: `Bearer ${accessToken}`,
+            "content-type": "application/json",
+          },
+          JSON.stringify({
+            platform_name,
+            platform_username,
+            metadata,
+          }),
+          null,
+          (err, result, response) => {
+            if (err) {
+              reject(err);
+            } else {
+              resolve(JSON.parse(result));
+            }
+          }
+        );
+      });
+      profile.linkedRole.set = role;
+      if (done) return done(null, profile);
+    } catch (e) {
+      if (e instanceof SyntaxError) {
+        reject(new Error("Failed to parse the user profile."));
+      }
+      if (done) return done(e, null);
+      return e;
     }
   }
 
@@ -218,15 +332,15 @@ class Strategy extends OAuth2Strategy {
             }
           });
         });
-        res(JSON.parse(result))
+        res(JSON.parse(result));
       } catch (err) {
         if (err instanceof SyntaxError) {
           reject(new Error("Failed to parse the user profile."));
         }
         // throw new InternalOAuthError("Failed to resolve API", err);
-        rej(err)
+        rej(err);
       }
-    })
+    });
   }
 
   /**
@@ -239,10 +353,16 @@ class Strategy extends OAuth2Strategy {
     var self = this;
 
     if (req.query && req.query.error) {
-      if (req.query.error == 'access_denied') {
+      if (req.query.error == "access_denied") {
         return this.fail({ message: req.query.error_description });
       } else {
-        return this.error(new AuthorizationError(req.query.error_description, req.query.error, req.query.error_uri));
+        return this.error(
+          new AuthorizationError(
+            req.query.error_description,
+            req.query.error,
+            req.query.error_uri
+          )
+        );
       }
     }
 
@@ -252,7 +372,10 @@ class Strategy extends OAuth2Strategy {
       if (!parsed.protocol) {
         // The callback URL is relative, resolve a fully qualified URL from the
         // URL of the originating request.
-        callbackURL = url.resolve(utils.originalURL(req, { proxy: this._trustProxy }), callbackURL);
+        callbackURL = url.resolve(
+          utils.originalURL(req, { proxy: this._trustProxy }),
+          callbackURL
+        );
       }
     }
 
@@ -260,12 +383,14 @@ class Strategy extends OAuth2Strategy {
       authorizationURL: this._oauth2._authorizeUrl,
       tokenURL: this._oauth2._accessTokenUrl,
       clientID: this._oauth2._clientId,
-      callbackURL: callbackURL
-    }
+      callbackURL: callbackURL,
+    };
 
     if ((req.query && req.query.code) || (req.body && req.body.code)) {
       function loaded(err, ok, state) {
-        if (err) { return self.error(err); }
+        if (err) {
+          return self.error(err);
+        }
         if (!ok) {
           return self.fail(state, 403);
         }
@@ -273,62 +398,113 @@ class Strategy extends OAuth2Strategy {
         var code = (req.query && req.query.code) || (req.body && req.body.code);
 
         var params = self.tokenParams(options);
-        params.grant_type = 'authorization_code';
-        if (callbackURL) { params.redirect_uri = callbackURL; }
-        if (typeof ok == 'string') { // PKCE
+        params.grant_type = "authorization_code";
+        if (callbackURL) {
+          params.redirect_uri = callbackURL;
+        }
+        if (typeof ok == "string") {
+          // PKCE
           params.code_verifier = ok;
         }
 
-        self._oauth2.getOAuthAccessToken(code, params,
+        self._oauth2.getOAuthAccessToken(
+          code,
+          params,
           function (err, accessToken, refreshToken, params) {
-            if (err) { return self.error(self._createOAuthError('Failed to obtain access token', err)); }
-            if (!accessToken) { return self.error(new Error('Failed to obtain access token')); }
+            if (err) {
+              return self.error(
+                self._createOAuthError("Failed to obtain access token", err)
+              );
+            }
+            if (!accessToken) {
+              return self.error(new Error("Failed to obtain access token"));
+            }
 
-            self._loadUserProfile(accessToken, function (err, {
-              profile,
-              consumable,
-            }) {
-              if (err) { return self.error(err); }
-
-              function verified(err, user, info) {
-                if (err) { return self.error(err); }
-                if (!user) { return self.fail(info); }
-
-                info = info || {};
-                if (state) { info.state = state; }
-                self.success(user, info);
-              }
-
-              try {
-                if (self._passReqToCallback) {
-                  var arity = self._verify.length;
-                  if (arity == 7) {
-                    self._verify(req, accessToken, refreshToken, params, profile, verified, consumable);
-                  } else { // arity == 6
-                    self._verify(req, accessToken, refreshToken, profile, verified, consumable);
-                  }
-                } else {
-                  var arity = self._verify.length;
-                  if (arity == 6) {
-                    self._verify(accessToken, refreshToken, params, profile, verified, consumable);
-                  } else { // arity == 5
-                    self._verify(accessToken, refreshToken, profile, verified, consumable);
-                  }
+            self._loadUserProfile(
+              accessToken,
+              function (err, { profile, consumable }) {
+                if (err) {
+                  return self.error(err);
                 }
-              } catch (ex) {
-                return self.error(ex);
+
+                function verified(err, user, info) {
+                  if (err) {
+                    return self.error(err);
+                  }
+                  if (!user) {
+                    return self.fail(info);
+                  }
+
+                  info = info || {};
+                  if (state) {
+                    info.state = state;
+                  }
+                  self.success(user, info);
+                }
+
+                try {
+                  if (self._passReqToCallback) {
+                    var arity = self._verify.length;
+                    if (arity == 7) {
+                      self._verify(
+                        req,
+                        accessToken,
+                        refreshToken,
+                        params,
+                        profile,
+                        verified,
+                        consumable
+                      );
+                    } else {
+                      // arity == 6
+                      self._verify(
+                        req,
+                        accessToken,
+                        refreshToken,
+                        profile,
+                        verified,
+                        consumable
+                      );
+                    }
+                  } else {
+                    var arity = self._verify.length;
+                    if (arity == 6) {
+                      self._verify(
+                        accessToken,
+                        refreshToken,
+                        params,
+                        profile,
+                        verified,
+                        consumable
+                      );
+                    } else {
+                      // arity == 5
+                      self._verify(
+                        accessToken,
+                        refreshToken,
+                        profile,
+                        verified,
+                        consumable
+                      );
+                    }
+                  }
+                } catch (ex) {
+                  return self.error(ex);
+                }
               }
-            });
+            );
           }
         );
       }
 
-      var state = (req.query && req.query.state) || (req.body && req.body.state);
+      var state =
+        (req.query && req.query.state) || (req.body && req.body.state);
       try {
         var arity = this._stateStore.verify.length;
         if (arity == 4) {
           this._stateStore.verify(req, state, meta, loaded);
-        } else { // arity == 3
+        } else {
+          // arity == 3
           this._stateStore.verify(req, state, loaded);
         }
       } catch (ex) {
@@ -336,33 +512,44 @@ class Strategy extends OAuth2Strategy {
       }
     } else {
       var params = this.authorizationParams(options);
-      params.response_type = 'code';
-      if (callbackURL) { params.redirect_uri = callbackURL; }
+      params.response_type = "code";
+      if (callbackURL) {
+        params.redirect_uri = callbackURL;
+      }
       var scope = options.scope || this._scope;
       if (scope) {
-        if (Array.isArray(scope)) { scope = scope.join(this._scopeSeparator); }
+        if (Array.isArray(scope)) {
+          scope = scope.join(this._scopeSeparator);
+        }
         params.scope = scope;
       }
       var verifier, challenge;
 
       if (this._pkceMethod) {
-        verifier = base64url(crypto.pseudoRandomBytes(32))
+        verifier = base64url(crypto.pseudoRandomBytes(32));
         switch (this._pkceMethod) {
-          case 'plain':
+          case "plain":
             challenge = verifier;
             break;
-          case 'S256':
-            challenge = base64url(crypto.createHash('sha256').update(verifier).digest());
+          case "S256":
+            challenge = base64url(
+              crypto.createHash("sha256").update(verifier).digest()
+            );
             break;
           default:
-            return this.error(new Error('Unsupported code verifier transformation method: ' + this._pkceMethod));
+            return this.error(
+              new Error(
+                "Unsupported code verifier transformation method: " +
+                  this._pkceMethod
+              )
+            );
         }
         params.code_challenge = challenge;
         params.code_challenge_method = this._pkceMethod;
       }
 
       var state = options.state;
-      if (state && typeof state == 'string') {
+      if (state && typeof state == "string") {
         // NOTE: In passport-oauth2@1.5.0 and earlier, `state` could be passed as
         //       an object.  However, it would result in an empty string being
         //       serialized as the value of the query parameter by `url.format()`,
@@ -377,18 +564,22 @@ class Strategy extends OAuth2Strategy {
 
         var parsed = url.parse(this._oauth2._authorizeUrl, true);
         utils.merge(parsed.query, params);
-        parsed.query['client_id'] = this._oauth2._clientId;
+        parsed.query["client_id"] = this._oauth2._clientId;
         delete parsed.search;
         var location = url.format(parsed);
         this.redirect(location);
       } else {
         function stored(err, state) {
-          if (err) { return self.error(err); }
+          if (err) {
+            return self.error(err);
+          }
 
-          if (state) { params.state = state; }
+          if (state) {
+            params.state = state;
+          }
           var parsed = url.parse(self._oauth2._authorizeUrl, true);
           utils.merge(parsed.query, params);
-          parsed.query['client_id'] = self._oauth2._clientId;
+          parsed.query["client_id"] = self._oauth2._clientId;
           delete parsed.search;
           var location = url.format(parsed);
           self.redirect(location);
@@ -402,7 +593,8 @@ class Strategy extends OAuth2Strategy {
             this._stateStore.store(req, state, meta, stored);
           } else if (arity == 3) {
             this._stateStore.store(req, meta, stored);
-          } else { // arity == 2
+          } else {
+            // arity == 2
             this._stateStore.store(req, stored);
           }
         } catch (ex) {
