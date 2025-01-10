@@ -160,7 +160,7 @@ done(null, consume.profile());
 
 - **`consume.linkedRole.get()`**: Returns the application role connection for the user. Requires an `role_connections.write` scope.
 
-- **`consume.linkedRole.set(platform_name, platform_username, metadata, done?)`**: Updates and returns the application role connection for the user. Requires an `role_connections.write` scope.
+- **`consume.linkedRole.set(platform_name?, platform_username?, metadata, done?)`**: Updates and returns the application role connection for the user. Requires an `role_connections.write` scope.
 
 ```js
 // Role register Example
@@ -188,7 +188,7 @@ done(null, consume.profile());
 // After registration do not forget to place url in designated field.
 // Bot setting -> General Information -> Linked Roles Verification URL
 
-await consume.set({
+await consume.set(undefined, undefined, {
   //key: value,
   cool: 1, //for type 7, value 1 represent true
 });
