@@ -1,14 +1,17 @@
 {
-  "dependencies": {
-    "passport-oauth2": "^1.8.0"
-  },
   "name": "discord-strategy",
   "description": "Passport strategy for Discord OAuth2",
-  "version": "2.2.0",
-  "main": "index.js",
+  "version": "2.5.0",
+  "main": "./dist/index.js",
   "scripts": {
+    "build": "npx tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "types": "./dist/index.d.ts",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bjn7/discord-strategy.git"
@@ -28,7 +31,12 @@
   },
   "homepage": "https://github.com/bjn7/discord-strategy#readme",
   "devDependencies": {
+    "@types/node": "^25.1.0",
     "@types/passport-oauth2": "^1.4.17",
-    "typescript": "^5.7.2"
+    "express": "^5.2.1",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "passport-oauth2": "^1.8.0"
   }
 }

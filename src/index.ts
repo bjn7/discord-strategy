@@ -1,62 +1,163 @@
-const OAuth2Strategy = require("passport-oauth2");
-const { InternalOAuthError } = require("passport-oauth2");
-const url = require("node:url");
-const utils = require("passport-oauth2/lib/utils");
-const base64url = require("base64url");
-const crypto = require("crypto");
+import base64url from "base64url";
+import crypto from "node:crypto";
+import OAuth2Strategy from "passport-oauth2";
+//@ts-ignore
+import * as utils from "passport-oauth2/lib/utils.js";
+import type { Request } from "express";
+import type {
+  ConsumableAPI,
+  DiscordStrategyOptions,
+  DiscordProfile,
+  DoneCallback,
+  ApplicationRoleConnectionMetadata,
+  VerifyCallback,
+} from "./types";
+
+import { DiscordScope } from "./types";
+
+import url from "node:url";
 
 const API_BASE = "https://discord.com/api/";
 
 /**
  * Represents the Discord OAuth2 strategy for Passport.
  * Extends the base OAuth2Strategy to provide custom behavior for Discord's API.
- * @param {Object} options - Configuration options for the strategy.
- * @param {Function} verify - Verification callback for the strategy.
+ * @param options - Configuration options for the strategy.
  * @throws Will throw an error if required options are missing.
  */
+
+// * @param verify - Verification callback for the strategy.
 class Strategy extends OAuth2Strategy {
-  constructor(options, verify) {
+  // @ts-ignore
+  // private _verify:
+  //   | VerifyFunction<DiscordProfile>
+  //   | VerifyFunctionWithRequest<DiscordProfile>;
+  // private _stateStore: any;
+  // private _scope: any;
+  // private _scopeSeparator: any;
+  // private _pkceMethod: any;
+
+  constructor(
+    options: DiscordStrategyOptions,
+    verify: (
+      accessToken: string,
+      refreshToken: string,
+      profile: DiscordProfile,
+      verified: VerifyCallback,
+      consume: ConsumableAPI,
+    ) => void,
+  );
+  constructor(
+    options: DiscordStrategyOptions,
+    verify: (
+      req: Request,
+      accessToken: string,
+      refreshToken: string,
+      results: DiscordProfile,
+      profile: any,
+      verified: VerifyCallback,
+      consume: ConsumableAPI,
+    ) => void,
+  );
+  constructor(
+    private options: DiscordStrategyOptions,
+    verify:
+      | ((
+          accessToken: string,
+          refreshToken: string,
+          profile: DiscordProfile,
+          verified: VerifyCallback,
+          consume: ConsumableAPI,
+        ) => void)
+      | ((
+          accessToken: string,
+          refreshToken: string,
+          results: any,
+          profile: DiscordProfile,
+          verified: VerifyCallback,
+          consume: ConsumableAPI,
+        ) => void)
+      | ((
+          req: Request,
+          accessToken: string,
+          refreshToken: string,
+          profile: DiscordProfile,
+          verified: VerifyCallback,
+          consume: ConsumableAPI,
+        ) => void)
+      | ((
+          req: Request,
+          accessToken: string,
+          refreshToken: string,
+          results: any,
+          profile: DiscordProfile,
+          verified: VerifyCallback,
+          consume: ConsumableAPI,
+        ) => void),
+  ) {
     options = options || {};
     options.authorizationURL =
       options.authorizationURL || "https://discord.com/api/oauth2/authorize";
     options.tokenURL =
       options.tokenURL || "https://discord.com/api/oauth2/token";
     options.scopeSeparator = options.scopeSeparator || " ";
-    options.scope = options.scope || ["identify", "email"];
+    options.scope = options.scope || [
+      DiscordScope.Identify,
+      DiscordScope.Email,
+    ];
 
     if (!options.callbackURL) throw new Error("Missing callbackURL property");
     if (!options.clientID) throw new Error("Missing clientID property");
     if (!options.clientSecret) throw new Error("Missing clientSecret property");
-    super(options, verify);
+    super(options, verify as any);
+
     this.options = options;
-    this.verify = verify;
+    // this.verify = verify;
     this.name = "discord";
     this._oauth2.useAuthorizationHeaderforGET(true);
   }
 
   /**
    * Fetches the user profile from Discord using the provided access token.
-   * @param {string} accessToken - The access token for the user.
-   * @param {Function} done - Callback to handle the user profile.
+   * @param accessToken - The access token for the user.
+   * @param [done] - Callback to handle the user profile.
    */
-  async userProfile(accessToken, done) {
+
+  override async userProfile(
+    accessToken: string,
+    done: (err: Error, result: null) => void,
+  ): Promise<void>;
+
+  override async userProfile(
+    accessToken: string,
+    done: (err: null, result: DiscordProfile) => void,
+  ): Promise<void>;
+
+  override async userProfile(
+    accessToken: string,
+    done: (err: any, result: any) => void,
+  ): Promise<void> {
     try {
-      const profile = await this.resolveApi("users/@me", accessToken);
+      const profile = (await this.resolveApi(
+        "users/@me",
+        accessToken,
+      )) as DiscordProfile;
       const consumable = {
         guilds: this.getGuilds.bind(this, profile, accessToken),
-        guildJoiner: this.guildJoiner.bind(this, profile, accessToken),
+        guildJoin: this.guildJoin.bind(this, profile, accessToken),
         connections: this.getConnection.bind(this, profile, accessToken),
         member: this.getMember.bind(this, profile, accessToken),
         linkedRole: {
           get: this.getRoleConnectionMetadata.bind(this, profile, accessToken),
           set: this.setRoleConnectionMetadata.bind(this, profile, accessToken),
         },
+        // @ts-ignore
         complexResolver: this._oauth2._request,
         profile: () => profile,
-        resolver: async (key, api) => {
+        resolver: async (key: string, api: string) => {
           return new Promise(async (resolve, reject) => {
             try {
-              const data = await this.resolveApi(api, accessToken);
+              const data: any = await this.resolveApi(api, accessToken);
               profile[key] = data;
               resolve(profile);
             } catch (err) {
@@ -64,22 +165,13 @@ class Strategy extends OAuth2Strategy {
             }
           });
         },
-        resolverCallbackBased: async (key, api, done) => {
-          try {
-            const data = await this.resolveApi(api, accessToken);
-            profile[key] = data;
-            done(null, profile);
-          } catch (err) {
-            done(err, null);
-          }
-        },
       };
       profile.avatarUrl = profile.avatar
         ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}`
         : undefined;
-      done(null, { profile, consumable });
+      done(null, { profile, consumable } as any);
     } catch (e) {
-      done(e, null);
+      done(e instanceof Error ? e : new Error(String(e)), null);
     }
   }
 
@@ -89,21 +181,29 @@ class Strategy extends OAuth2Strategy {
    * @param {string} accessToken - The access token for the user.
    * @throws Will throw an error if the required scope is not included.
    */
-  async getConnection(profile, accessToken, done) {
-    if (!this.options.scope || !this.options.scope.includes("connections")) {
+
+  async getConnection(
+    profile: DiscordProfile,
+    accessToken: string,
+    done?: DoneCallback,
+  ): Promise<void> {
+    if (
+      !this.options.scope ||
+      !this.options.scope.includes(DiscordScope.Connections)
+    ) {
       throw new Error("Missing Scope, 'connections'");
     }
 
     try {
       const connections = await this.resolveApi(
         "users/@me/connections",
-        accessToken
+        accessToken,
       );
-      profile.connections = connections;
+      profile["connections"] = connections;
       if (done) done(null, profile);
-    } catch (e) {
-      if (done) return done(e, null);
-      return e;
+    } catch (e: any) {
+      if (done) done(e instanceof Error ? e : new Error(String(e)), profile);
+      else throw e;
     }
   }
 
@@ -113,46 +213,58 @@ class Strategy extends OAuth2Strategy {
    * @param {string} accessToken - The access token for the user.
    * @throws Will throw an error if the required scope is not included.
    */
-  async getGuilds(profile, accessToken, done) {
-    if (!this.options.scope || !this.options.scope.includes("guilds")) {
+  async getGuilds(
+    profile: DiscordProfile,
+    accessToken: string,
+    done?: DoneCallback,
+  ): Promise<void> {
+    if (
+      !this.options.scope ||
+      !this.options.scope.includes(DiscordScope.Guilds)
+    ) {
       throw new Error("Missing Scope, 'guilds'");
     }
 
     try {
       const guilds = await this.resolveApi("users/@me/guilds", accessToken);
-      profile.guilds = guilds;
+      profile["guilds"] = guilds;
       if (done) done(null, profile);
     } catch (e) {
-      if (done) return done(e, null);
-      return e;
+      if (done) done(e instanceof Error ? e : new Error(String(e)), profile);
+      else throw e;
     }
   }
 
-  async getMember(profile, accessToken, guild_id, done) {
+  async getMember(
+    profile: DiscordProfile,
+    accessToken: string,
+    guild_id: string,
+    done?: DoneCallback,
+  ): Promise<void> {
     if (
       !this.options.scope ||
-      !this.options.scope.includes("guilds.members.read")
+      !this.options.scope.includes(DiscordScope.GuildsMembersRead)
     ) {
       throw new Error("Missing Scope, 'guilds.members.read'");
     }
-    if (!profile.member) {
-      profile.member = {};
+    if (!profile["member"]) {
+      profile["member"] = {};
     }
 
+    // spaghetti code
     try {
       const member = await this.resolveApi(
         `users/@me/guilds/${guild_id}/member`,
-        accessToken
+        accessToken,
       );
-      profile.member[guild_id] = member;
+      profile["member"][guild_id] = member;
       if (done) done(null, profile);
-    } catch (e) {
-      if (JSON.parse(e.data)?.code == 10004) {
-        profile.member[guild_id] = null;
-        e = null;
+    } catch (e: any) {
+      if (e.data?.code == 10004) {
+        profile["member"][guild_id] = null;
       } else {
-        if (done) return done(e, profile);
-        return e;
+        if (done) done(e instanceof Error ? e : new Error(String(e)), profile);
+        else throw e;
       }
     }
   }
@@ -167,18 +279,20 @@ class Strategy extends OAuth2Strategy {
    * @param {string[]} roles - The roles to assign to the user.
    * @param {Function} done - Callback for handling the result.
    */
-  async guildJoiner(
-    profile,
-    accessToken,
-    botToken,
-    serverId,
-    nick,
-    roles,
-    done
-  ) {
-    if (!this.options.scope || !this.options.scope.includes("guilds.join")) {
-      done(new Error("Missing Scope, 'guilds.join'"));
-      return;
+  async guildJoin(
+    profile: DiscordProfile,
+    accessToken: string,
+    botToken: string,
+    serverId: string,
+    nick: string,
+    roles: string[],
+    done?: DoneCallback,
+  ): Promise<void> {
+    if (
+      !this.options.scope ||
+      !this.options.scope.includes(DiscordScope.GuildsJoin)
+    ) {
+      throw new Error("Missing Scope, 'guilds.join'");
     }
 
     const body = {
@@ -188,7 +302,8 @@ class Strategy extends OAuth2Strategy {
     };
 
     try {
-      const res = await new Promise((resolve, reject) => {
+      const res: any = await new Promise((resolve, reject) => {
+        // @ts-ignore
         this._oauth2._request(
           "PUT",
           `${API_BASE}guilds/${serverId}/members/${profile.id}`,
@@ -198,22 +313,27 @@ class Strategy extends OAuth2Strategy {
           },
           JSON.stringify(body),
           null,
+          // @ts-ignore
           (err, result, response) => {
             if (err) {
               reject(err);
             } else {
               resolve(response);
             }
-          }
+          },
         );
       });
+      // @ts-ignore
       if (res.statusCode === 201 || res.statusCode === 204) {
-        done(null, null);
+        done?.(null, profile);
       } else {
-        done(null, res.statusCode);
+        if (done) done(null, res.statusCode);
+        else throw new Error(res.statusCode);
       }
-    } catch (error) {
-      done(error);
+    } catch (err) {
+      if (done)
+        done(err instanceof Error ? err : new Error(String(err)), profile);
+      else throw err;
     }
   }
 
@@ -224,27 +344,33 @@ class Strategy extends OAuth2Strategy {
    * @returns {Promise<Object>} The resolved data.
    * @throws Will throw an error for request or parsing issues.
    */
-  async getRoleConnectionMetadata(profile, accessToken, done) {
+  async getRoleConnectionMetadata(
+    profile: DiscordProfile,
+    accessToken: string,
+    done?: DoneCallback,
+  ): Promise<void> {
     if (
       !this.options.scope ||
-      !this.options.scope.includes("role_connections.write")
+      !this.options.scope.includes(DiscordScope.RoleConnectionsWrite)
     ) {
       throw new Error("Missing Scope, 'role_connections.write'");
     }
 
-    if (!profile.linkedRole) {
-      profile.linkedRole = {};
+    if (!profile["linkedRole"]) {
+      profile["linkedRole"] = {};
     }
+
     try {
       const metadata = await this.resolveApi(
         `users/@me/applications/${this.options.clientID}/role-connection`,
-        accessToken
+        accessToken,
       );
-      profile.linkedRole.get = metadata;
+      // doesn't it need to be parsed into js object????
+      profile["linkedRole"].get = metadata; //todo!(): unknown??
       if (done) return done(null, profile);
     } catch (e) {
-      if (done) return done(e, null);
-      return e;
+      if (done) done(e instanceof Error ? e : new Error(String(e)), profile);
+      else throw e;
     }
   }
 
@@ -262,24 +388,25 @@ class Strategy extends OAuth2Strategy {
    * @throws Will throw an error for request or parsing issues.
    */
   async setRoleConnectionMetadata(
-    profile,
-    accessToken,
-    platform_name,
-    platform_username,
-    metadata,
-    done
-  ) {
+    profile: DiscordProfile,
+    accessToken: string,
+    platform_name: string,
+    platform_username: string,
+    metadata: ApplicationRoleConnectionMetadata,
+    done?: DoneCallback,
+  ): Promise<void> {
     if (
       !this.options.scope ||
-      !this.options.scope.includes("role_connections.write")
+      !this.options.scope.includes(DiscordScope.RoleConnectionsWrite)
     ) {
       throw new Error("Missing Scope, 'role_connections.write'");
     }
-    if (!profile.linkedRole) {
-      profile.linkedRole = {};
+    if (!profile["linkedRole"]) {
+      profile["linkedRole"] = {};
     }
     try {
       const role = await new Promise((resolve, reject) => {
+        //@ts-ignore
         this._oauth2._request(
           "PUT",
           `${API_BASE}/users/@me/applications/${this.options.clientID}/role-connection`,
@@ -293,23 +420,22 @@ class Strategy extends OAuth2Strategy {
             metadata,
           }),
           null,
+          // @ts-ignore
           (err, result, response) => {
             if (err) {
               reject(err);
             } else {
-              resolve(JSON.parse(result));
+              // huh? whats this??
+              resolve(JSON.parse(result as any));
             }
-          }
+          },
         );
       });
-      profile.linkedRole.set = role;
+      profile["linkedRole"].set = role;
       if (done) return done(null, profile);
     } catch (e) {
-      if (e instanceof SyntaxError) {
-        reject(new Error("Failed to parse the user profile."));
-      }
-      if (done) return done(e, null);
-      return e;
+      if (done) done(e instanceof Error ? e : new Error(String(e)), profile);
+      else throw e;
     }
   }
 
@@ -320,7 +446,7 @@ class Strategy extends OAuth2Strategy {
    * @returns {Promise<Object>} The resolved data.
    * @throws Will throw an error for request or parsing issues.
    */
-  async resolveApi(api, accessToken) {
+  async resolveApi(api: string, accessToken: string): Promise<unknown> {
     return new Promise(async (res, rej) => {
       try {
         const result = await new Promise((resolve, reject) => {
@@ -332,11 +458,11 @@ class Strategy extends OAuth2Strategy {
             }
           });
         });
-        res(JSON.parse(result));
+        res(JSON.parse(result as any));
       } catch (err) {
-        if (err instanceof SyntaxError) {
-          reject(new Error("Failed to parse the user profile."));
-        }
+        // if (err instanceof SyntaxError) {
+        //   rej(new Error("Failed to parse the user profile."));
+        // }
         // throw new InternalOAuthError("Failed to resolve API", err);
         rej(err);
       }
@@ -344,50 +470,56 @@ class Strategy extends OAuth2Strategy {
   }
 
   /**
-   * Authenticate the request.
-   * @param {Object} req - The request object.
-   * @param {Object} options - Authentication options.
+   * Authenticate request by delegating to a service provider using OAuth 2.0.
+   *
+   * @param {Object} req
+   * @api protected
    */
-  authenticate = function (req, options) {
+  override authenticate(req: any, options: any) {
     options = options || {};
-    var self = this;
+    var self: any = this;
 
     if (req.query && req.query.error) {
       if (req.query.error == "access_denied") {
         return this.fail({ message: req.query.error_description });
       } else {
         return this.error(
-          new AuthorizationError(
+          new Strategy.AuthorizationError(
             req.query.error_description,
             req.query.error,
-            req.query.error_uri
-          )
+            req.query.error_uri,
+          ),
         );
       }
     }
 
+    // @ts-ignore
     var callbackURL = options.callbackURL || this._callbackURL;
     if (callbackURL) {
-      var parsed = url.parse(callbackURL);
-      if (!parsed.protocol) {
+      var parsed = url.URL.parse(callbackURL);
+      if (!parsed?.protocol) {
         // The callback URL is relative, resolve a fully qualified URL from the
         // URL of the originating request.
         callbackURL = url.resolve(
+          // @ts-ignore
           utils.originalURL(req, { proxy: this._trustProxy }),
-          callbackURL
+          callbackURL,
         );
       }
     }
 
     var meta = {
+      // @ts-ignore
       authorizationURL: this._oauth2._authorizeUrl,
+      // @ts-ignore
       tokenURL: this._oauth2._accessTokenUrl,
+      // @ts-ignore
       clientID: this._oauth2._clientId,
       callbackURL: callbackURL,
     };
 
     if ((req.query && req.query.code) || (req.body && req.body.code)) {
-      function loaded(err, ok, state) {
+      function loaded(err: any, ok: any, state: any) {
         if (err) {
           return self.error(err);
         }
@@ -397,7 +529,8 @@ class Strategy extends OAuth2Strategy {
 
         var code = (req.query && req.query.code) || (req.body && req.body.code);
 
-        var params = self.tokenParams(options);
+        var params: any = self.tokenParams(options);
+
         params.grant_type = "authorization_code";
         if (callbackURL) {
           params.redirect_uri = callbackURL;
@@ -410,10 +543,15 @@ class Strategy extends OAuth2Strategy {
         self._oauth2.getOAuthAccessToken(
           code,
           params,
-          function (err, accessToken, refreshToken, params) {
+          function (
+            err: any,
+            accessToken: any,
+            refreshToken: any,
+            params: any,
+          ) {
             if (err) {
               return self.error(
-                self._createOAuthError("Failed to obtain access token", err)
+                self._createOAuthError("Failed to obtain access token", err),
               );
             }
             if (!accessToken) {
@@ -422,12 +560,18 @@ class Strategy extends OAuth2Strategy {
 
             self._loadUserProfile(
               accessToken,
-              function (err, { profile, consumable }) {
+              function (
+                err: Error,
+                {
+                  profile,
+                  consumable,
+                }: { profile: DiscordProfile; consumable: ConsumableAPI },
+              ) {
                 if (err) {
                   return self.error(err);
                 }
 
-                function verified(err, user, info) {
+                function verified(err: Error, user: any, info: any) {
                   if (err) {
                     return self.error(err);
                   }
@@ -444,7 +588,9 @@ class Strategy extends OAuth2Strategy {
 
                 try {
                   if (self._passReqToCallback) {
-                    var arity = self._verify.length;
+                    // @ts-ignore
+
+                    var arity = (self as Strategy)._verify.length;
                     if (arity == 7) {
                       self._verify(
                         req,
@@ -453,7 +599,7 @@ class Strategy extends OAuth2Strategy {
                         params,
                         profile,
                         verified,
-                        consumable
+                        consumable,
                       );
                     } else {
                       // arity == 6
@@ -463,11 +609,11 @@ class Strategy extends OAuth2Strategy {
                         refreshToken,
                         profile,
                         verified,
-                        consumable
+                        consumable,
                       );
                     }
                   } else {
-                    var arity = self._verify.length;
+                    var arity = self._verify.length as any as number;
                     if (arity == 6) {
                       self._verify(
                         accessToken,
@@ -475,7 +621,7 @@ class Strategy extends OAuth2Strategy {
                         params,
                         profile,
                         verified,
-                        consumable
+                        consumable,
                       );
                     } else {
                       // arity == 5
@@ -484,67 +630,78 @@ class Strategy extends OAuth2Strategy {
                         refreshToken,
                         profile,
                         verified,
-                        consumable
+                        consumable,
                       );
                     }
                   }
                 } catch (ex) {
                   return self.error(ex);
                 }
-              }
+              },
             );
-          }
+          },
         );
       }
 
       var state =
         (req.query && req.query.state) || (req.body && req.body.state);
       try {
+        // @ts-ignore
         var arity = this._stateStore.verify.length;
         if (arity == 4) {
+          // @ts-ignore
           this._stateStore.verify(req, state, meta, loaded);
         } else {
           // arity == 3
+          // @ts-ignore
+          // @ts-ignore
           this._stateStore.verify(req, state, loaded);
         }
       } catch (ex) {
         return this.error(ex);
       }
     } else {
-      var params = this.authorizationParams(options);
+      var params = this.authorizationParams(options) as any;
       params.response_type = "code";
       if (callbackURL) {
         params.redirect_uri = callbackURL;
       }
+
+      // @ts-ignore
       var scope = options.scope || this._scope;
       if (scope) {
         if (Array.isArray(scope)) {
+          // @ts-ignore
           scope = scope.join(this._scopeSeparator);
         }
         params.scope = scope;
       }
       var verifier, challenge;
 
+      // @ts-ignore
       if (this._pkceMethod) {
         verifier = base64url(crypto.pseudoRandomBytes(32));
+        // @ts-ignore
         switch (this._pkceMethod) {
           case "plain":
             challenge = verifier;
             break;
           case "S256":
             challenge = base64url(
-              crypto.createHash("sha256").update(verifier).digest()
+              crypto.createHash("sha256").update(verifier).digest(),
             );
             break;
           default:
             return this.error(
               new Error(
                 "Unsupported code verifier transformation method: " +
-                  this._pkceMethod
-              )
+                  // @ts-ignore
+                  this._pkceMethod,
+              ),
             );
         }
         params.code_challenge = challenge;
+        // @ts-ignore
         params.code_challenge_method = this._pkceMethod;
       }
 
@@ -562,22 +719,28 @@ class Strategy extends OAuth2Strategy {
         //       state store.
         params.state = state;
 
-        var parsed = url.parse(this._oauth2._authorizeUrl, true);
+        // @ts-ignore
+        var parsed = url.parse((this._oauth2 as any)._authorizeUrl, true);
+        // @ts-ignore
         utils.merge(parsed.query, params);
+        // @ts-ignore
         parsed.query["client_id"] = this._oauth2._clientId;
+        // @ts-ignore
         delete parsed.search;
+        // @ts-ignore
         var location = url.format(parsed);
         this.redirect(location);
       } else {
-        function stored(err, state) {
+        function stored(err: any, state: any) {
           if (err) {
             return self.error(err);
           }
 
           if (state) {
+            // @ts-ignore
             params.state = state;
           }
-          var parsed = url.parse(self._oauth2._authorizeUrl, true);
+          var parsed: any = url.parse(self._oauth2._authorizeUrl, true);
           utils.merge(parsed.query, params);
           parsed.query["client_id"] = self._oauth2._clientId;
           delete parsed.search;
@@ -586,15 +749,24 @@ class Strategy extends OAuth2Strategy {
         }
 
         try {
+          // @ts-ignore
           var arity = this._stateStore.store.length;
-          if (arity == 5) {
+          if (arity == 6) {
+            // @ts-ignore
+
             this._stateStore.store(req, verifier, state, meta, stored);
-          } else if (arity == 4) {
+          } else if (arity == 5) {
+            // @ts-ignore
+
             this._stateStore.store(req, state, meta, stored);
-          } else if (arity == 3) {
+          } else if (arity == 4) {
+            // @ts-ignore
+
             this._stateStore.store(req, meta, stored);
           } else {
-            // arity == 2
+            // @ts-ignore
+
+            // arity == 3
             this._stateStore.store(req, stored);
           }
         } catch (ex) {
@@ -602,7 +774,8 @@ class Strategy extends OAuth2Strategy {
         }
       }
     }
-  };
+  }
 }
 
-module.exports = Strategy;
+export { DiscordScope, Strategy };
+export type { DiscordProfile, VerifyCallback, ConsumableAPI };
