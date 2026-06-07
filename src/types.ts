@@ -175,7 +175,9 @@ export interface StrategyFetchResult {
   profile: DiscordProfile;
 }
 
-export interface DiscordStrategyOptions extends OAuth2Strategy.StrategyOptions {
+export interface DiscordStrategyOptions extends Omit<OAuth2Strategy.StrategyOptions, "authorizationURL" | "tokenURL"> {
+  authorizationURL?: string;
+  tokenURL?: string;
   scope?: DiscordScope[];
 }
 
